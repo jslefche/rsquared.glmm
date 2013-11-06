@@ -1,124 +1,124 @@
-# Function rsquared.glme requires models to be input as a list (can include fixed-
-# effects only models,but not a good idea to mix models of class "mer" with models
-# of class "lme")
-
-rsquared.glme=function(modlist) {
-  # Iterate over each model in the list
-  do.call(rbind,lapply(modlist,function(i) {
-    # For models fit using lm
-    if(class(i)=="lm") {
-      Rsquared.mat=data.frame(Class=class(i),Family="Gaussian",
-                              Marginal=summary(i)$r.squared,
-                              Conditional=NA,AIC=AIC(i)) }
-    # For general linear models fit using lme4
-    else if(class(i)=="lmerMod" | class(i)=="merLmerTest") {
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
-      # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
-      # Get residual variance
-      VarResid=attr(VarCorr(i),"sc")^2
-      # Calculate marginal R-squared (fixed effects/total variance)
-      Rm=VarF/(VarF+VarRand+VarResid)
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+VarResid)
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Family="Gaussian",Marginal=Rm,
-                              Conditional=Rc,AIC=AIC(update(i,REML=F))) }
-    #For generalized linear models (family=="binomial") fit using lme4
-    else if(class(i)=="glmerMod" & summary(i)$family=="binomial") {
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
-      # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
-      # Get residual variance
-      VarResid=attr(VarCorr(i),"sc")^2
-      # Calculate marginal R-squared
-      Rm=VarF/(VarF+VarRand+pi^2/3)
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+pi^2/3)
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Family=summary(i)$family,Marginal=Rm,
-                              Conditional=Rc,AIC=AIC(i)) }
-    #For generalized linear models (family=="poisson") fit using lme4
-    else if(class(i)=="glmerMod" & summary(i)$family=="poisson") {
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
-      # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
-      # Get residual variance
-      VarResid=attr(VarCorr(i),"sc")^2
-      # Get fixed effects names to generate null model
-      fixef.names=do.call(rbind,lapply(1:length(names(fixef(i))[-1]),function(j) {
-        d=colnames(i@frame)[pmatch(colnames(i@frame),names(fixef(i))[-1][j])>0]
-        d[!is.na(d)] } ) )[,1]
-      # Generate null model (intercept and random effects only, no fixed effects)
-      null.mod=update(i,paste(".~.-",paste(fixef.names,collapse="-"),sep=""))
-      # Calculate marginal R-squared
-      Rm=VarF/(VarF+VarRand+log(1+1/exp(as.numeric(fixef(null.mod)))))
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+log(1+1/exp(as.numeric(fixef(null.mod)))))
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Family=summary(i)$family,Marginal=Rm,
-                              Conditional=Rc,AIC=AIC(i)) }
-    # For model fit using nlme
-    else if(class(i)=="lme") {
-      # Get design matrix of fixed effects from model
-      Fmat=model.matrix(eval(i$call$fixed)[-2],i$data)
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(Fmat)))
-      # Get variance of random effects by extracting variance components
-      VarRand=sum(suppressWarnings(as.numeric(VarCorr(i)
-                  [rownames(VarCorr(i))!="Residual",1])),na.rm=T)
-      # Get residual variance
-      VarResid=as.numeric(VarCorr(i)[rownames(VarCorr(i))=="Residual",1])
-      # Calculate marginal R-squared (fixed effects/total variance)
-      Rm=VarF/(VarF+VarRand+VarResid)
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+VarResid)
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Marginal=Rm,Conditional=Rc,
-                              AIC=AIC(update(i,method="ML")))
-    } else { print("Function requires models of class lm, lme, mer, or merMod")
-} } ) ) }
-
-### Examples ###
-
-# set.seed(9)
-# data=data.frame(y=rnorm(100,5,10),y.binom=rbinom(100,1,0.5),
-#  y.poisson=rpois(100,5),fixed1=rnorm(100,20,100),
-#  fixed2=rnorm(100,0.5,2),rand1=LETTERS[1:2],
-#  rand2=c(rep("C",50),rep("D",50)))
-# 
-# library(lme4)
-# #Linear model
-# mod0=lm(y~fixed1,data)
-# #Linear mixed effects model
-# mod1=lmer(y~fixed1+(1|rand2/rand1),data)
-# mod2=lmer(y~fixed1+fixed2+(1|rand2/rand1),data)
-# rsquared.glme(list(mod0,mod1,mod2))
-# #Generalized linear mixed effects model (binomial)
-# mod3=glmer(y.binom~fixed1+fixed2+(1|rand2/rand1),family="binomial",data)
-# rsquared.glme(list(mod3))
-# #Generalized linear mixed effects model (poisson)
-# mod4=glmer(y.poisson~fixed1+fixed2+(1|rand2/rand1),family="poisson",data)
-# rsquared.glme(list(mod4))
-# #Get values for all kinds of models
-# lmer.models=rsquared.glme(list(mod0,mod1,mod2,mod3,mod4));lmer.models
-# 
-# # Load library MuMIn to compare output to function 'r.squaredGLMM'
-# library(MuMIn)
-# do.call(rbind,lapply(list(mod0,mod1,mod2,mod3,mod4),r.squaredGLMM)) 
-# # Error for Poisson model
-# 
-# # Try with lmerTest package -- output should be the same as above
-# library(lmerTest)
-# lmerTest.models=rsquared.glme(list(mod0,mod1,mod2,mod3,mod4)); lmerTest.models
-# lmer.models==lmerTest.models #This is generating odd results
-# 
-# detach(package:lme4,unload=T) #Parts of this package conflict with lme4
-# require(nlme)
-# mod0=lm(y~fixed1,data)
-# mod1=lme(y~fixed1,random=~1|rand2/rand1,data)
-# mod2=lme(y~fixed1+fixed2,random=~1|rand2/rand1,data)
-# rsquared.glme(list(mod0,mod1,mod2))
+<div style="overflow:auto;"><div class="geshifilter"><pre class="r geshifilter-R" style="font-family:monospace;"><span style="color: #666666; font-style: italic;"># Function rsquared.glmm requires models to be input as a list (can include fixed-</span>
+<span style="color: #666666; font-style: italic;"># effects only models,but not a good idea to mix models of class &quot;mer&quot; with models</span>
+<span style="color: #666666; font-style: italic;"># of class &quot;lme&quot;)</span>
+&nbsp;
+rsquared.glmm=<a href="http://inside-r.org/r-doc/base/function"><span style="color: #003399; font-weight: bold;">function</span></a><span style="color: #009900;">&#40;</span>modlist<span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+  <span style="color: #666666; font-style: italic;"># Iterate over each model in the list</span>
+  <a href="http://inside-r.org/r-doc/base/do.call"><span style="color: #003399; font-weight: bold;">do.call</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/rbind"><span style="color: #003399; font-weight: bold;">rbind</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/lapply"><span style="color: #003399; font-weight: bold;">lapply</span></a><span style="color: #009900;">&#40;</span>modlist<span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/function"><span style="color: #003399; font-weight: bold;">function</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+    <span style="color: #666666; font-style: italic;"># For models fit using lm</span>
+    <span style="color: #000000; font-weight: bold;">if</span><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;lm&quot;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+      Rsquared.mat=<a href="http://inside-r.org/r-doc/base/data.frame"><span style="color: #003399; font-weight: bold;">data.frame</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/packages/cran/class"><span style="">Class</span></a>=<a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>Family=<span style="color: #0000ff;">&quot;Gaussian&quot;</span><span style="color: #339933;">,</span>
+                              Marginal=<a href="http://inside-r.org/r-doc/base/summary"><span style="color: #003399; font-weight: bold;">summary</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">$</span>r.squared<span style="color: #339933;">,</span>
+                              Conditional=<span style="color: #000000; font-weight: bold;">NA</span><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a>=<a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#125;</span>
+    <span style="color: #666666; font-style: italic;"># For general linear models fit using lme4</span>
+    <span style="color: #000000; font-weight: bold;">else</span> <span style="color: #000000; font-weight: bold;">if</span><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;lmerMod&quot;</span> <span style="">|</span> <a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;merLmerTest&quot;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of fixed effects by multiplying coefficients by design matrix</span>
+      VarF=<a href="http://inside-r.org/r-doc/stats/var"><span style="color: #003399; font-weight: bold;">var</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.vector"><span style="color: #003399; font-weight: bold;">as.vector</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/fixef"><span style="color: #003399; font-weight: bold;">fixef</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span> <span style="">%*%</span> <a href="http://inside-r.org/r-doc/base/t"><span style="color: #003399; font-weight: bold;">t</span></a><span style="color: #009900;">&#40;</span>i<span style="">@</span>pp<span style="">$</span>X<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of random effects by extracting variance components</span>
+      VarRand=<a href="http://inside-r.org/r-doc/base/colSums"><span style="color: #003399; font-weight: bold;">colSums</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/do.call"><span style="color: #003399; font-weight: bold;">do.call</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/rbind"><span style="color: #003399; font-weight: bold;">rbind</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/lapply"><span style="color: #003399; font-weight: bold;">lapply</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/function"><span style="color: #003399; font-weight: bold;">function</span></a><span style="color: #009900;">&#40;</span>j<span style="color: #009900;">&#41;</span> j<span style="color: #009900;">&#91;</span><span style="color: #cc66cc;">1</span><span style="color: #009900;">&#93;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get residual variance</span>
+      VarResid=<a href="http://inside-r.org/r-doc/base/attr"><span style="color: #003399; font-weight: bold;">attr</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><span style="color: #0000ff;">&quot;sc&quot;</span><span style="color: #009900;">&#41;</span><span style="">^</span><span style="color: #cc66cc;">2</span>
+      <span style="color: #666666; font-style: italic;"># Calculate marginal R-squared (fixed effects/total variance)</span>
+      Rm=VarF<span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span>VarResid<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Calculate conditional R-squared (fixed effects+random effects/total variance)</span>
+      <a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a>=<span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="color: #009900;">&#41;</span><span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span>VarResid<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Bind R^2s into a matrix and return with AIC values</span>
+      Rsquared.mat=<a href="http://inside-r.org/r-doc/base/data.frame"><span style="color: #003399; font-weight: bold;">data.frame</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/packages/cran/class"><span style="">Class</span></a>=<a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>Family=<span style="color: #0000ff;">&quot;Gaussian&quot;</span><span style="color: #339933;">,</span>Marginal=Rm<span style="color: #339933;">,</span>
+                              Conditional=<a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a>=<a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/stats/update"><span style="color: #003399; font-weight: bold;">update</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #339933;">,</span>REML=F<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#125;</span>
+    <span style="color: #666666; font-style: italic;">#For generalized linear models (family==&quot;binomial&quot;) fit using lme4</span>
+    <span style="color: #000000; font-weight: bold;">else</span> <span style="color: #000000; font-weight: bold;">if</span><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;glmerMod&quot;</span> <span style="">&amp;</span> <a href="http://inside-r.org/r-doc/base/summary"><span style="color: #003399; font-weight: bold;">summary</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">$</span>family<span style="">==</span><span style="color: #0000ff;">&quot;binomial&quot;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of fixed effects by multiplying coefficients by design matrix</span>
+      VarF=<a href="http://inside-r.org/r-doc/stats/var"><span style="color: #003399; font-weight: bold;">var</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.vector"><span style="color: #003399; font-weight: bold;">as.vector</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/fixef"><span style="color: #003399; font-weight: bold;">fixef</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span> <span style="">%*%</span> <a href="http://inside-r.org/r-doc/base/t"><span style="color: #003399; font-weight: bold;">t</span></a><span style="color: #009900;">&#40;</span>i<span style="">@</span>pp<span style="">$</span>X<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of random effects by extracting variance components</span>
+      VarRand=<a href="http://inside-r.org/r-doc/base/colSums"><span style="color: #003399; font-weight: bold;">colSums</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/do.call"><span style="color: #003399; font-weight: bold;">do.call</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/rbind"><span style="color: #003399; font-weight: bold;">rbind</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/lapply"><span style="color: #003399; font-weight: bold;">lapply</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/function"><span style="color: #003399; font-weight: bold;">function</span></a><span style="color: #009900;">&#40;</span>j<span style="color: #009900;">&#41;</span> j<span style="color: #009900;">&#91;</span><span style="color: #cc66cc;">1</span><span style="color: #009900;">&#93;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get residual variance</span>
+      VarResid=<a href="http://inside-r.org/r-doc/base/attr"><span style="color: #003399; font-weight: bold;">attr</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><span style="color: #0000ff;">&quot;sc&quot;</span><span style="color: #009900;">&#41;</span><span style="">^</span><span style="color: #cc66cc;">2</span>
+      <span style="color: #666666; font-style: italic;"># Calculate marginal R-squared</span>
+      Rm=VarF<span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span><span style="color: #000000; font-weight: bold;">pi</span><span style="">^</span><span style="color: #cc66cc;">2</span><span style="">/</span><span style="color: #cc66cc;">3</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Calculate conditional R-squared (fixed effects+random effects/total variance)</span>
+      <a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a>=<span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="color: #009900;">&#41;</span><span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span><span style="color: #000000; font-weight: bold;">pi</span><span style="">^</span><span style="color: #cc66cc;">2</span><span style="">/</span><span style="color: #cc66cc;">3</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Bind R^2s into a matrix and return with AIC values</span>
+      Rsquared.mat=<a href="http://inside-r.org/r-doc/base/data.frame"><span style="color: #003399; font-weight: bold;">data.frame</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/packages/cran/class"><span style="">Class</span></a>=<a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>Family=<a href="http://inside-r.org/r-doc/base/summary"><span style="color: #003399; font-weight: bold;">summary</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">$</span>family<span style="color: #339933;">,</span>Marginal=Rm<span style="color: #339933;">,</span>
+                              Conditional=<a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a>=<a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#125;</span>
+    <span style="color: #666666; font-style: italic;">#For generalized linear models (family==&quot;poisson&quot;) fit using lme4</span>
+    <span style="color: #000000; font-weight: bold;">else</span> <span style="color: #000000; font-weight: bold;">if</span><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;glmerMod&quot;</span> <span style="">&amp;</span> <a href="http://inside-r.org/r-doc/base/summary"><span style="color: #003399; font-weight: bold;">summary</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">$</span>family<span style="">==</span><span style="color: #0000ff;">&quot;poisson&quot;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of fixed effects by multiplying coefficients by design matrix</span>
+      VarF=<a href="http://inside-r.org/r-doc/stats/var"><span style="color: #003399; font-weight: bold;">var</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.vector"><span style="color: #003399; font-weight: bold;">as.vector</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/fixef"><span style="color: #003399; font-weight: bold;">fixef</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span> <span style="">%*%</span> <a href="http://inside-r.org/r-doc/base/t"><span style="color: #003399; font-weight: bold;">t</span></a><span style="color: #009900;">&#40;</span>i<span style="">@</span>pp<span style="">$</span>X<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of random effects by extracting variance components</span>
+      VarRand=<a href="http://inside-r.org/r-doc/base/colSums"><span style="color: #003399; font-weight: bold;">colSums</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/do.call"><span style="color: #003399; font-weight: bold;">do.call</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/rbind"><span style="color: #003399; font-weight: bold;">rbind</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/lapply"><span style="color: #003399; font-weight: bold;">lapply</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/function"><span style="color: #003399; font-weight: bold;">function</span></a><span style="color: #009900;">&#40;</span>j<span style="color: #009900;">&#41;</span> j<span style="color: #009900;">&#91;</span><span style="color: #cc66cc;">1</span><span style="color: #009900;">&#93;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get residual variance</span>
+      VarResid=<a href="http://inside-r.org/r-doc/base/attr"><span style="color: #003399; font-weight: bold;">attr</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><span style="color: #0000ff;">&quot;sc&quot;</span><span style="color: #009900;">&#41;</span><span style="">^</span><span style="color: #cc66cc;">2</span>
+      <span style="color: #666666; font-style: italic;"># Get random effects names to generate null model</span>
+      rand.formula=<a href="http://inside-r.org/r-doc/stats/reformulate"><span style="color: #003399; font-weight: bold;">reformulate</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/sapply"><span style="color: #003399; font-weight: bold;">sapply</span></a><span style="color: #009900;">&#40;</span>findbars<span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/stats/formula"><span style="color: #003399; font-weight: bold;">formula</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/function"><span style="color: #003399; font-weight: bold;">function</span></a><span style="color: #009900;">&#40;</span>x<span style="color: #009900;">&#41;</span> 
+        paste0<span style="color: #009900;">&#40;</span><span style="color: #0000ff;">&quot;(&quot;</span><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/base/deparse"><span style="color: #003399; font-weight: bold;">deparse</span></a><span style="color: #009900;">&#40;</span>x<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span><span style="color: #0000ff;">&quot;)&quot;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>response=<span style="color: #0000ff;">&quot;.&quot;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Generate null model (intercept and random effects only, no fixed effects)</span>
+      null.mod=<a href="http://inside-r.org/r-doc/stats/update"><span style="color: #003399; font-weight: bold;">update</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #339933;">,</span>rand.formula<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Calculate marginal R-squared</span>
+      Rm=VarF<span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span><a href="http://inside-r.org/r-doc/base/log"><span style="color: #003399; font-weight: bold;">log</span></a><span style="color: #009900;">&#40;</span><span style="color: #cc66cc;">1</span><span style="">+</span><span style="color: #cc66cc;">1</span><span style="">/</span>exp<span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.numeric"><span style="color: #003399; font-weight: bold;">as.numeric</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/fixef"><span style="color: #003399; font-weight: bold;">fixef</span></a><span style="color: #009900;">&#40;</span>null.mod<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Calculate conditional R-squared (fixed effects+random effects/total variance)</span>
+      <a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a>=<span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="color: #009900;">&#41;</span><span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span><a href="http://inside-r.org/r-doc/base/log"><span style="color: #003399; font-weight: bold;">log</span></a><span style="color: #009900;">&#40;</span><span style="color: #cc66cc;">1</span><span style="">+</span><span style="color: #cc66cc;">1</span><span style="">/</span>exp<span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.numeric"><span style="color: #003399; font-weight: bold;">as.numeric</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/fixef"><span style="color: #003399; font-weight: bold;">fixef</span></a><span style="color: #009900;">&#40;</span>null.mod<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Bind R^2s into a matrix and return with AIC values</span>
+      Rsquared.mat=<a href="http://inside-r.org/r-doc/base/data.frame"><span style="color: #003399; font-weight: bold;">data.frame</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/packages/cran/class"><span style="">Class</span></a>=<a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>Family=<a href="http://inside-r.org/r-doc/base/summary"><span style="color: #003399; font-weight: bold;">summary</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">$</span>family<span style="color: #339933;">,</span>Marginal=Rm<span style="color: #339933;">,</span>
+                              Conditional=<a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a><span style="color: #339933;">,</span><a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a>=<a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#125;</span>
+    <span style="color: #666666; font-style: italic;"># For model fit using nlme</span>
+    <span style="color: #000000; font-weight: bold;">else</span> <span style="color: #000000; font-weight: bold;">if</span><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;lme&quot;</span><span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#123;</span>
+      <span style="color: #666666; font-style: italic;"># Get design matrix of fixed effects from model</span>
+      Fmat=<a href="http://inside-r.org/r-doc/stats/model.matrix"><span style="color: #003399; font-weight: bold;">model.matrix</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/eval"><span style="color: #003399; font-weight: bold;">eval</span></a><span style="color: #009900;">&#40;</span>i<span style="">$</span>call<span style="">$</span>fixed<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#91;</span><span style="">-</span><span style="color: #cc66cc;">2</span><span style="color: #009900;">&#93;</span><span style="color: #339933;">,</span>i<span style="">$</span>data<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of fixed effects by multiplying coefficients by design matrix</span>
+      VarF=<a href="http://inside-r.org/r-doc/stats/var"><span style="color: #003399; font-weight: bold;">var</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.vector"><span style="color: #003399; font-weight: bold;">as.vector</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/fixef"><span style="color: #003399; font-weight: bold;">fixef</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span> <span style="">%*%</span> <a href="http://inside-r.org/r-doc/base/t"><span style="color: #003399; font-weight: bold;">t</span></a><span style="color: #009900;">&#40;</span>Fmat<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get variance of random effects by extracting variance components</span>
+      VarRand=<a href="http://inside-r.org/r-doc/base/sum"><span style="color: #003399; font-weight: bold;">sum</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/suppressWarnings"><span style="color: #003399; font-weight: bold;">suppressWarnings</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/base/as.numeric"><span style="color: #003399; font-weight: bold;">as.numeric</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span>
+        <span style="color: #009900;">&#91;</span><a href="http://inside-r.org/r-doc/base/rownames"><span style="color: #003399; font-weight: bold;">rownames</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="">!</span>=<span style="color: #0000ff;">&quot;Residual&quot;</span><span style="color: #339933;">,</span><span style="color: #cc66cc;">1</span><span style="color: #009900;">&#93;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>na.rm=T<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Get residual variance</span>
+      VarResid=<a href="http://inside-r.org/r-doc/base/as.numeric"><span style="color: #003399; font-weight: bold;">as.numeric</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#91;</span><a href="http://inside-r.org/r-doc/base/rownames"><span style="color: #003399; font-weight: bold;">rownames</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/nlme/VarCorr"><span style="color: #003399; font-weight: bold;">VarCorr</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="">==</span><span style="color: #0000ff;">&quot;Residual&quot;</span><span style="color: #339933;">,</span><span style="color: #cc66cc;">1</span><span style="color: #009900;">&#93;</span><span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Calculate marginal R-squared (fixed effects/total variance)</span>
+      Rm=VarF<span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span>VarResid<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Calculate conditional R-squared (fixed effects+random effects/total variance)</span>
+      <a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a>=<span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="color: #009900;">&#41;</span><span style="">/</span><span style="color: #009900;">&#40;</span>VarF<span style="">+</span>VarRand<span style="">+</span>VarResid<span style="color: #009900;">&#41;</span>
+      <span style="color: #666666; font-style: italic;"># Bind R^2s into a matrix and return with AIC values</span>
+      Rsquared.mat=<a href="http://inside-r.org/r-doc/base/data.frame"><span style="color: #003399; font-weight: bold;">data.frame</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/packages/cran/class"><span style="">Class</span></a>=<a href="http://inside-r.org/r-doc/base/class"><span style="color: #003399; font-weight: bold;">class</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #009900;">&#41;</span><span style="color: #339933;">,</span>Marginal=Rm<span style="color: #339933;">,</span>Conditional=<a href="http://inside-r.org/packages/cran/RC"><span style="">Rc</span></a><span style="color: #339933;">,</span>
+                              <a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a>=<a href="http://inside-r.org/r-doc/stats/AIC"><span style="color: #003399; font-weight: bold;">AIC</span></a><span style="color: #009900;">&#40;</span><a href="http://inside-r.org/r-doc/stats/update"><span style="color: #003399; font-weight: bold;">update</span></a><span style="color: #009900;">&#40;</span>i<span style="color: #339933;">,</span>method=<span style="color: #0000ff;">&quot;ML&quot;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span><span style="color: #009900;">&#41;</span>
+    <span style="color: #009900;">&#125;</span> <span style="color: #000000; font-weight: bold;">else</span> <span style="color: #009900;">&#123;</span> <a href="http://inside-r.org/r-doc/base/print"><span style="color: #003399; font-weight: bold;">print</span></a><span style="color: #009900;">&#40;</span><span style="color: #0000ff;">&quot;Function requires models of class lm, lme, mer, or merMod&quot;</span><span style="color: #009900;">&#41;</span>
+    <span style="color: #009900;">&#125;</span> <span style="color: #009900;">&#125;</span> <span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#41;</span> <span style="color: #009900;">&#125;</span>
+&nbsp;
+<span style="color: #666666; font-style: italic;">### Examples ###</span>
+&nbsp;
+<span style="color: #666666; font-style: italic;"># set.seed(9)</span>
+<span style="color: #666666; font-style: italic;"># data=data.frame(y=rnorm(100,5,10),y.binom=rbinom(100,1,0.5),</span>
+<span style="color: #666666; font-style: italic;">#  y.poisson=rpois(100,5),fixed1=rnorm(100,20,100),</span>
+<span style="color: #666666; font-style: italic;">#  fixed2=c(&quot;Treatment1&quot;,&quot;Treatment2&quot;),rand1=LETTERS[1:2],</span>
+<span style="color: #666666; font-style: italic;">#  rand1=LETTERS[1:2],</span>
+<span style="color: #666666; font-style: italic;">#  rand2=c(rep(&quot;W&quot;,25),rep(&quot;X&quot;,25),rep(&quot;Y&quot;,25),rep(&quot;Z&quot;,25)))</span>
+<span style="color: #666666; font-style: italic;"># </span>
+<span style="color: #666666; font-style: italic;"># library(lme4)</span>
+<span style="color: #666666; font-style: italic;"># #Linear model</span>
+<span style="color: #666666; font-style: italic;"># mod0=lm(y~fixed1,data)</span>
+<span style="color: #666666; font-style: italic;"># #Linear mixed effects model</span>
+<span style="color: #666666; font-style: italic;"># mod1=lmer(y~fixed1+(1|rand2/rand1),data)</span>
+<span style="color: #666666; font-style: italic;"># mod2=lmer(y~fixed1+fixed2+(1|rand2/rand1),data)</span>
+<span style="color: #666666; font-style: italic;"># rsquared.glmm(list(mod0,mod1,mod2))</span>
+<span style="color: #666666; font-style: italic;"># #Generalized linear mixed effects model (binomial)</span>
+<span style="color: #666666; font-style: italic;"># mod3=glmer(y.binom~fixed1*fixed2+(1|rand2/rand1),family=&quot;binomial&quot;,data)</span>
+<span style="color: #666666; font-style: italic;"># rsquared.glmm(list(mod3))</span>
+<span style="color: #666666; font-style: italic;"># #Generalized linear mixed effects model (poisson)</span>
+<span style="color: #666666; font-style: italic;"># mod4=glmer(y.poisson~fixed1*fixed2+(1|rand2/rand1),family=&quot;poisson&quot;,data)</span>
+<span style="color: #666666; font-style: italic;"># rsquared.glmm(list(mod4))</span>
+<span style="color: #666666; font-style: italic;"># #Get values for all kinds of models</span>
+<span style="color: #666666; font-style: italic;"># lmer.models=rsquared.glmm(list(mod0,mod1,mod2,mod3,mod4));lmer.models</span>
+<span style="color: #666666; font-style: italic;"># </span>
+<span style="color: #666666; font-style: italic;"># # Load library MuMIn to compare output to function 'r.squaredGLMM'</span>
+<span style="color: #666666; font-style: italic;"># library(MuMIn)</span>
+<span style="color: #666666; font-style: italic;"># do.call(rbind,lapply(list(mod0,mod1,mod2,mod3,mod4),r.squaredGLMM)) </span>
+<span style="color: #666666; font-style: italic;"># # Error for Poisson model</span>
+<span style="color: #666666; font-style: italic;"># </span>
+<span style="color: #666666; font-style: italic;"># # Try with lmerTest package -- output should be the same as above</span>
+<span style="color: #666666; font-style: italic;"># library(lmerTest)</span>
+<span style="color: #666666; font-style: italic;"># lmerTest.models=rsquared.glmm(list(mod0,mod1,mod2,mod3,mod4)); lmerTest.models</span>
+<span style="color: #666666; font-style: italic;"># lmer.models==lmerTest.models #This is generating odd results</span>
+<span style="color: #666666; font-style: italic;"># </span>
+<span style="color: #666666; font-style: italic;"># detach(package:lme4,unload=T) #Parts of this package conflict with lme4</span>
+<span style="color: #666666; font-style: italic;"># require(nlme)</span>
+<span style="color: #666666; font-style: italic;"># mod0=lm(y~fixed1,data)</span>
+<span style="color: #666666; font-style: italic;"># mod1=lme(y~fixed1,random=~1|rand2/rand1,data)</span>
+<span style="color: #666666; font-style: italic;"># mod2=lme(y~fixed1+fixed2,random=~1|rand2/rand1,data)</span>
+<span style="color: #666666; font-style: italic;"># rsquared.glmm(list(mod0,mod1,mod2))</span></pre></div></div><p><a href="http://www.inside-r.org/pretty-r" title="Created by Pretty R at inside-R.org">Created by Pretty R at inside-R.org</a></p>
