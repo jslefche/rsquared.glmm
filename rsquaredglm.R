@@ -10,8 +10,8 @@ rsquared.glmm=function(modlist) {
       Rsquared.mat=data.frame(Class=class(i),Family="Gaussian",
                               Marginal=summary(i)$r.squared,
                               Conditional=NA,AIC=AIC(i)) }
-    # For general linear models fit using lme4
-    else if(class(i)=="lmerMod" | class(i)=="merLmerTest") {
+    # For general linear models fit using lme4, lmerTest, blme...
+    else if(inherits(i, "lmerMod")) {
       # Get variance of fixed effects by multiplying coefficients by design matrix
       VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
       # Get variance of random effects by extracting variance components
@@ -25,8 +25,8 @@ rsquared.glmm=function(modlist) {
       # Bind R^2s into a matrix and return with AIC values
       Rsquared.mat=data.frame(Class=class(i),Family="Gaussian",Marginal=Rm,
                               Conditional=Rc,AIC=AIC(update(i,REML=F))) }
-    #For generalized linear models (family=="binomial") fit using lme4
-    else if(class(i)=="glmerMod" & summary(i)$family=="binomial") {
+    #For generalized linear models (family=="binomial") fit using lme4, blme...
+    else if(inherits(i, "glmerMod") & summary(i)$family=="binomial") {
       # Get variance of fixed effects by multiplying coefficients by design matrix
       VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
       # Get variance of random effects by extracting variance components
@@ -40,8 +40,8 @@ rsquared.glmm=function(modlist) {
       # Bind R^2s into a matrix and return with AIC values
       Rsquared.mat=data.frame(Class=class(i),Family=summary(i)$family,Marginal=Rm,
                               Conditional=Rc,AIC=AIC(i)) }
-    #For generalized linear models (family=="poisson") fit using lme4
-    else if(class(i)=="glmerMod" & summary(i)$family=="poisson") {
+    #For generalized linear models (family=="poisson") fit using lme4, blme...
+    else if(inherits(i, "glmerMod") & summary(i)$family=="poisson") {
       # Get variance of fixed effects by multiplying coefficients by design matrix
       VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
       # Get variance of random effects by extracting variance components
