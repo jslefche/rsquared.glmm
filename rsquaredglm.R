@@ -13,11 +13,11 @@ rsquared.glmm=function(modlist) {
     # For general linear models fit using lme4, lmerTest, blme...
     else if(inherits(i, "lmerMod")) {
       # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
+      VarF=var(as.vector(lme4::fixef(i) %*% t(i@pp$X)))
       # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
+      VarRand=colSums(do.call(rbind,lapply(lme4::VarCorr(i),function(j) j[1])))
       # Get residual variance
-      VarResid=attr(VarCorr(i),"sc")^2
+      VarResid=attr(lme4::VarCorr(i),"sc")^2
       # Calculate marginal R-squared (fixed effects/total variance)
       Rm=VarF/(VarF+VarRand+VarResid)
       # Calculate conditional R-squared (fixed effects+random effects/total variance)
@@ -28,11 +28,11 @@ rsquared.glmm=function(modlist) {
     #For generalized linear models (family=="binomial") fit using lme4, blme...
     else if(inherits(i, "glmerMod") & summary(i)$family=="binomial") {
       # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
+      VarF=var(as.vector(lme4::fixef(i) %*% t(i@pp$X)))
       # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
+      VarRand=colSums(do.call(rbind,lapply(lme4::VarCorr(i),function(j) j[1])))
       # Get residual variance
-      VarResid=attr(VarCorr(i),"sc")^2
+      VarResid=attr(lme4::VarCorr(i),"sc")^2
       # Calculate marginal R-squared
       Rm=VarF/(VarF+VarRand+pi^2/3)
       # Calculate conditional R-squared (fixed effects+random effects/total variance)
@@ -43,20 +43,20 @@ rsquared.glmm=function(modlist) {
     #For generalized linear models (family=="poisson") fit using lme4, blme...
     else if(inherits(i, "glmerMod") & summary(i)$family=="poisson") {
       # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(i@pp$X)))
+      VarF=var(as.vector(lme4::fixef(i) %*% t(i@pp$X)))
       # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
+      VarRand=colSums(do.call(rbind,lapply(lme4::VarCorr(i),function(j) j[1])))
       # Get residual variance
-      VarResid=attr(VarCorr(i),"sc")^2
+      VarResid=attr(lme4::VarCorr(i),"sc")^2
       # Get random effects names to generate null model
       rand.formula=reformulate(sapply(findbars(formula(i)),function(x) 
         paste0("(",deparse(x),")")),response=".")
       # Generate null model (intercept and random effects only, no fixed effects)
       null.mod=update(i,rand.formula)
       # Calculate marginal R-squared
-      Rm=VarF/(VarF+VarRand+log(1+1/exp(as.numeric(fixef(null.mod)))))
+      Rm=VarF/(VarF+VarRand+log(1+1/exp(as.numeric(lme4::fixef(null.mod)))))
       # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+log(1+1/exp(as.numeric(fixef(null.mod)))))
+      Rc=(VarF+VarRand)/(VarF+VarRand+log(1+1/exp(as.numeric(lme4::fixef(null.mod)))))
       # Bind R^2s into a matrix and return with AIC values
       Rsquared.mat=data.frame(Class=class(i),Family=summary(i)$family,Marginal=Rm,
                               Conditional=Rc,AIC=AIC(i)) }
@@ -65,12 +65,12 @@ rsquared.glmm=function(modlist) {
       # Get design matrix of fixed effects from model
       Fmat=model.matrix(eval(i$call$fixed)[-2],i$data)
       # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(fixef(i) %*% t(Fmat)))
+      VarF=var(as.vector(nlme::fixef(i) %*% t(Fmat)))
       # Get variance of random effects by extracting variance components
-      VarRand=sum(suppressWarnings(as.numeric(VarCorr(i)
-                  [rownames(VarCorr(i))!="Residual",1])),na.rm=T)
+      VarRand=sum(suppressWarnings(as.numeric(nlme::VarCorr(i)
+                  [rownames(nlme::VarCorr(i))!="Residual",1])),na.rm=T)
       # Get residual variance
-      VarResid=as.numeric(VarCorr(i)[rownames(VarCorr(i))=="Residual",1])
+      VarResid=as.numeric(nlme::VarCorr(i)[rownames(nlme::VarCorr(i))=="Residual",1])
       # Calculate marginal R-squared (fixed effects/total variance)
       Rm=VarF/(VarF+VarRand+VarResid)
       # Calculate conditional R-squared (fixed effects+random effects/total variance)
