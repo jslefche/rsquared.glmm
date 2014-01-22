@@ -1,8 +1,8 @@
-# Function rsquared.glme requires models to be input as a list (can include fixed-
+# Function rsquared.glmm requires models to be input as a list (can include fixed-
 # effects only models,but not a good idea to mix models of class "mer" with models
 # of class "lme")
 
-rsquared.glme=function(modlist) {
+rsquared.glmm=function(modlist) {
   # Iterate over each model in the list
   do.call(rbind,lapply(modlist,function(i) {
     # For models fit using lm
@@ -48,12 +48,11 @@ rsquared.glme=function(modlist) {
       VarRand=colSums(do.call(rbind,lapply(VarCorr(i),function(j) j[1])))
       # Get residual variance
       VarResid=attr(VarCorr(i),"sc")^2
-      # Get fixed effects names to generate null model
-      fixef.names=do.call(rbind,lapply(1:length(names(fixef(i))[-1]),function(j) {
-        d=colnames(i@frame)[pmatch(colnames(i@frame),names(fixef(i))[-1][j])>0]
-        d[!is.na(d)] } ) )[,1]
+      # Get random effects names to generate null model
+      rand.formula=reformulate(sapply(findbars(formula(i)),function(x) 
+        paste0("(",deparse(x),")")),response=".")
       # Generate null model (intercept and random effects only, no fixed effects)
-      null.mod=update(i,paste(".~.-",paste(fixef.names,collapse="-"),sep=""))
+      null.mod=update(i,rand.formula)
       # Calculate marginal R-squared
       Rm=VarF/(VarF+VarRand+log(1+1/exp(as.numeric(fixef(null.mod)))))
       # Calculate conditional R-squared (fixed effects+random effects/total variance)
@@ -87,8 +86,9 @@ rsquared.glme=function(modlist) {
 # set.seed(9)
 # data=data.frame(y=rnorm(100,5,10),y.binom=rbinom(100,1,0.5),
 #  y.poisson=rpois(100,5),fixed1=rnorm(100,20,100),
-#  fixed2=rnorm(100,0.5,2),rand1=LETTERS[1:2],
-#  rand2=c(rep("C",50),rep("D",50)))
+#  fixed2=c("Treatment1","Treatment2"),rand1=LETTERS[1:2],
+#  rand1=LETTERS[1:2],
+#  rand2=c(rep("W",25),rep("X",25),rep("Y",25),rep("Z",25)))
 # 
 # library(lme4)
 # #Linear model
@@ -96,15 +96,15 @@ rsquared.glme=function(modlist) {
 # #Linear mixed effects model
 # mod1=lmer(y~fixed1+(1|rand2/rand1),data)
 # mod2=lmer(y~fixed1+fixed2+(1|rand2/rand1),data)
-# rsquared.glme(list(mod0,mod1,mod2))
+# rsquared.glmm(list(mod0,mod1,mod2))
 # #Generalized linear mixed effects model (binomial)
-# mod3=glmer(y.binom~fixed1+fixed2+(1|rand2/rand1),family="binomial",data)
-# rsquared.glme(list(mod3))
+# mod3=glmer(y.binom~fixed1*fixed2+(1|rand2/rand1),family="binomial",data)
+# rsquared.glmm(list(mod3))
 # #Generalized linear mixed effects model (poisson)
-# mod4=glmer(y.poisson~fixed1+fixed2+(1|rand2/rand1),family="poisson",data)
-# rsquared.glme(list(mod4))
+# mod4=glmer(y.poisson~fixed1*fixed2+(1|rand2/rand1),family="poisson",data)
+# rsquared.glmm(list(mod4))
 # #Get values for all kinds of models
-# lmer.models=rsquared.glme(list(mod0,mod1,mod2,mod3,mod4));lmer.models
+# lmer.models=rsquared.glmm(list(mod0,mod1,mod2,mod3,mod4));lmer.models
 # 
 # # Load library MuMIn to compare output to function 'r.squaredGLMM'
 # library(MuMIn)
@@ -113,7 +113,7 @@ rsquared.glme=function(modlist) {
 # 
 # # Try with lmerTest package -- output should be the same as above
 # library(lmerTest)
-# lmerTest.models=rsquared.glme(list(mod0,mod1,mod2,mod3,mod4)); lmerTest.models
+# lmerTest.models=rsquared.glmm(list(mod0,mod1,mod2,mod3,mod4)); lmerTest.models
 # lmer.models==lmerTest.models #This is generating odd results
 # 
 # detach(package:lme4,unload=T) #Parts of this package conflict with lme4
@@ -121,4 +121,4 @@ rsquared.glme=function(modlist) {
 # mod0=lm(y~fixed1,data)
 # mod1=lme(y~fixed1,random=~1|rand2/rand1,data)
 # mod2=lme(y~fixed1+fixed2,random=~1|rand2/rand1,data)
-# rsquared.glme(list(mod0,mod1,mod2))
+# rsquared.glmm(list(mod0,mod1,mod2))
