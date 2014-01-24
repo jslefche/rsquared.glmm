@@ -1,85 +1,153 @@
-# Function rsquared.glmm requires models to be input as a list (can include fixed-
-# effects only models,but not a good idea to mix models of class "mer" with models
-# of class "lme")
-
+#' R-squared and pseudo-rsquared for a list of (generalized) linear (mixed) models
+#'
+#' This function calls the generic \code{\link{r.squared}} function for each of the
+#' models in the list and rbinds the outputs into one data frame
+#'
+#' @param a list of fitted (generalized) linear (mixed) model objects
+#' @return a dataframe with one row per model, and "Class",
+#'         "Family", "Marginal", "Conditional" and "AIC" columns
 rsquared.glmm=function(modlist) {
   # Iterate over each model in the list
-  do.call(rbind,lapply(modlist,function(i) {
-    # For models fit using lm
-    if(class(i)=="lm") {
-      Rsquared.mat=data.frame(Class=class(i),Family="Gaussian",
-                              Marginal=summary(i)$r.squared,
-                              Conditional=NA,AIC=AIC(i)) }
-    # For general linear models fit using lme4, lmerTest, blme...
-    else if(inherits(i, "lmerMod")) {
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(lme4::fixef(i) %*% t(i@pp$X)))
-      # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(lme4::VarCorr(i),function(j) j[1])))
-      # Get residual variance
-      VarResid=attr(lme4::VarCorr(i),"sc")^2
-      # Calculate marginal R-squared (fixed effects/total variance)
-      Rm=VarF/(VarF+VarRand+VarResid)
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+VarResid)
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Family="Gaussian",Marginal=Rm,
-                              Conditional=Rc,AIC=AIC(update(i,REML=F))) }
-    #For generalized linear models (family=="binomial") fit using lme4, blme...
-    else if(inherits(i, "glmerMod") & summary(i)$family=="binomial") {
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(lme4::fixef(i) %*% t(i@pp$X)))
-      # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(lme4::VarCorr(i),function(j) j[1])))
-      # Get residual variance
-      VarResid=attr(lme4::VarCorr(i),"sc")^2
-      # Calculate marginal R-squared
-      Rm=VarF/(VarF+VarRand+pi^2/3)
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+pi^2/3)
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Family=summary(i)$family,Marginal=Rm,
-                              Conditional=Rc,AIC=AIC(i)) }
-    #For generalized linear models (family=="poisson") fit using lme4, blme...
-    else if(inherits(i, "glmerMod") & summary(i)$family=="poisson") {
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(lme4::fixef(i) %*% t(i@pp$X)))
-      # Get variance of random effects by extracting variance components
-      VarRand=colSums(do.call(rbind,lapply(lme4::VarCorr(i),function(j) j[1])))
-      # Get residual variance
-      VarResid=attr(lme4::VarCorr(i),"sc")^2
+  do.call(rbind,lapply(modlist, r.squared))
+}
+
+#' R-squared and pseudo-rsquared for (generalized) linear (mixed) models
+#'
+#' This generic function calculates the r squared and pseudo r-squared for
+#' a variety of(generalized) linear (mixed) model fits.
+#' Currently implemented for \code{\link{lm}}, \code{\link{lmerTest::merMod}},
+#' and \code{\link{nlme::lme}} objects.
+#' Implementing methods usually call \code{\link{.rsquared.glmm}}
+#'
+#' @param mdl a fitted (generalized) linear (mixed) model object
+#' @return Implementing methods usually return a dataframe with "Class",
+#'         "Family", "Marginal", "Conditional", and "AIC" columns
+r.squared <- function(mdl){
+  UseMethod("r.squared")
+}
+
+#' Marginal r-squared for lm objects
+#'
+# This method extracts the variance for fixed and random effects, residuals,
+# and the fixed effects for the null model (in the case of Poisson family),
+#' and calls \code{\link{.rsquared.glmm}}
+#'
+#' @param mdl an merMod model (usually fit using \code{\link{lme4::lmer}},
+#'        \code{\link{lme4::glmer}}, \code{\link{lmerTest::lmer}},
+#'        \code{\link{blme::blmer}}, \code{\link{blme::bglmer}}, etc)
+#' @return a dataframe with with "Class" = "lm", "Family" = "gaussian",
+#'        "Marginal" = unadjusted r-squared, "Conditional" = NA, and "AIC" columns
+r.squared.lm <- function(mdl){
+  data.frame(Class=class(mdl), Family="gaussian",
+             Marginal=summary(mdl)$r.squared,
+             Conditional=NA, AIC=AIC(mdl))
+}
+
+#' Marginal and conditional r-squared for merMod objects
+#'
+#' This method extracts the variance for fixed and random effects, residuals,
+#' and the fixed effects for the null model (in the case of Poisson family),
+#' and calls \code{\link{.rsquared.glmm}}
+#'
+#' @param mdl an merMod model (usually fit using \code{\link{lme4::lmer}},
+#'        \code{\link{lme4::glmer}}, \code{\link{lmerTest::lmer}},
+#'        \code{\link{blme::blmer}}, \code{\link{blme::bglmer}}, etc)
+r.squared.merMod <- function(mdl){
+  # Get variance of fixed effects by multiplying coefficients by design matrix
+  VarF <- var(as.vector(lme4::fixef(mdl) %*% t(mdl@pp$X)))
+  # Get variance of random effects by extracting variance components
+  VarRand <- colSums(do.call(rbind, lapply(lme4::VarCorr(mdl), function(x) x[1])))
+  # Get residual variance
+  VarResid <- attr(lme4::VarCorr(mdl),"sc")^2
+  if(inherits(mdl, "lmerMod")){
+    mdl.aic  <- AIC(update(mdl, REML=F))
+    family <- "gaussian"
+  }
+  else if(inherits(mdl, "glmerMod")){
+    family <- summary(mdl)$family
+    mdl.aic <- AIC(mdl)
+    # Pseudo-r-squared for poisson also requires the fixed effects of the null model
+    if(family=="poisson") {
       # Get random effects names to generate null model
-      rand.formula=reformulate(sapply(findbars(formula(i)),function(x) 
-        paste0("(",deparse(x),")")),response=".")
+      rand.formula <- reformulate(sapply(findbars(formula(mdl)),
+                                         function(x) paste0("(", deparse(x), ")")),
+                                  response=".")
       # Generate null model (intercept and random effects only, no fixed effects)
-      null.mod=update(i,rand.formula)
-      # Calculate marginal R-squared
-      Rm=VarF/(VarF+VarRand+log(1+1/exp(as.numeric(lme4::fixef(null.mod)))))
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+log(1+1/exp(as.numeric(lme4::fixef(null.mod)))))
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Family=summary(i)$family,Marginal=Rm,
-                              Conditional=Rc,AIC=AIC(i)) }
-    # For model fit using nlme
-    else if(class(i)=="lme") {
-      # Get design matrix of fixed effects from model
-      Fmat=model.matrix(eval(i$call$fixed)[-2],i$data)
-      # Get variance of fixed effects by multiplying coefficients by design matrix
-      VarF=var(as.vector(nlme::fixef(i) %*% t(Fmat)))
-      # Get variance of random effects by extracting variance components
-      VarRand=sum(suppressWarnings(as.numeric(nlme::VarCorr(i)
-                  [rownames(nlme::VarCorr(i))!="Residual",1])),na.rm=T)
-      # Get residual variance
-      VarResid=as.numeric(nlme::VarCorr(i)[rownames(nlme::VarCorr(i))=="Residual",1])
-      # Calculate marginal R-squared (fixed effects/total variance)
-      Rm=VarF/(VarF+VarRand+VarResid)
-      # Calculate conditional R-squared (fixed effects+random effects/total variance)
-      Rc=(VarF+VarRand)/(VarF+VarRand+VarResid)
-      # Bind R^2s into a matrix and return with AIC values
-      Rsquared.mat=data.frame(Class=class(i),Marginal=Rm,Conditional=Rc,
-                              AIC=AIC(update(i,method="ML")))
-    } else { print("Function requires models of class lm, lme, mer, or merMod")
-} } ) ) }
+      null.mdl <- update(mdl, rand.formula)
+      # Get the fixed effects of the null model
+      null.fixef <- as.numeric(lme4::fixef(null.mdl))
+    }
+  }
+  # Call the internal function to do the pseudo r-squared calculations
+  .rsquared.glmm(VarF, VarRand, VarResid, family = family,
+                 mdl.aic = mdl.aic,
+                 mdl.class = class(mdl),
+                 null.fixef = null.fixef)
+}
+
+#' Marginal and conditional r-squared for lme objects
+#'
+#' This method extracts the variance for fixed and random effects,
+#' as well as residuals, and calls \code{\link{.rsquared.glmm}}
+#'
+#' @param mdl an lme model (usually fit using \code{\link{nlme::lme}})
+r.squared.lme <- function(mdl){
+  # Get design matrix of fixed effects from model
+  Fmat <- model.matrix(eval(mdl$call$fixed)[-2], mdl$data)
+  # Get variance of fixed effects by multiplying coefficients by design matrix
+  VarF <- var(as.vector(nlme::fixef(mdl) %*% t(Fmat)))
+  # Get variance of random effects by extracting variance components
+  VarRand <- sum(suppressWarnings(as.numeric(nlme::VarCorr(mdl)
+                                          [rownames(nlme::VarCorr(mdl)) != "Residual",
+                                           1])), na.rm=T)
+  # Get residual variance
+  VarResid <- as.numeric(nlme::VarCorr(mdl)[rownames(nlme::VarCorr(mdl))=="Residual", 1])
+  # Call the internal function to do the pseudo r-squared calculations
+  .rsquared.glmm(VarF, VarRand, VarResid, family = "gaussian",
+                 mdl.aic = AIC(update(mdl, method="ML")),
+                               mdl.class = class(mdl))
+}
+
+#' Marginal and conditional r-squared for glmm given fixed and random variances
+#'
+#' This function is based on Nakagawa and Schielzeth (2013). It returns the marginal
+#' and conditional r-squared, as well as the AIC for each glmm.
+#' Users should call the higher-level generic "r.squared", or implement a method for the
+#' corresponding class to get varF, varRand and the family from the specific object
+#'
+#' @param varF Variance of fixed effects
+#' @param varRand Variance of random effects
+#' @family family family of the glmm (currently works with gaussian, binomial and poisson)
+#' @param mdl.aic The model's AIC
+#' @param mdl.class The name of the model's class
+#' @param null.fixef a numeric vector containing the fixed effects of the null model. This
+#'        parameter is only necessary for "poisson" family
+#' @return A data frame with "Class", "Family", "Marginal", "Conditional", and "AIC" columns
+.rsquared.glmm <- function(varF, varRand, VarResid, family,
+                           mdl.aic, mdl.class, null.fixef = NULL){
+  Rm <- NULL # Marginal R-squared
+  Rc <- NULL # Conditional R-squared
+  if(family == "gaussian"){
+    # Calculate marginal R-squared (fixed effects/total variance)
+    Rm <- varF/(varF+varRand+VarResid)
+    # Calculate conditional R-squared (fixed effects+random effects/total variance)
+    Rc <- (varF+varRand)/(varF+varRand+VarResid)
+  }
+  else if(family == "binomial"){
+    # Calculate marginal R-squared
+    Rm <- varF/(varF+varRand+pi^2/3)
+    # Calculate conditional R-squared (fixed effects+random effects/total variance)
+    Rc <- (varF+varRand)/(varF+varRand+pi^2/3)
+  }
+  else if(family == "poisson"){
+    # Calculate marginal R-squared
+    Rm <- varF/(varF+varRand+log(1+1/exp(null.fixef)))
+    # Calculate conditional R-squared (fixed effects+random effects/total variance)
+    Rc <- (varF+varRand)/(varF+varRand+log(1+1/exp(null.fixef)))
+  }
+  # Bind R^2s into a matrix and return with AIC values
+  data.frame(Class=mdl.class, Family = family, Marginal=Rm, Conditional=Rc, AIC=mdl.aic)
+}
 
 ### Examples ###
 
