@@ -78,6 +78,6 @@ all.equal(lme4.models[1:3, -(1:2)], lmerTest.models[,-(1:2)])
 library(nlme)
 lme.mod1 <- lme(y~fixed1,random=~1|rand2/rand1,data)
 lme.mod2 <- lme(y~fixed1+fixed2,random=~1|rand2/rand1,data)
-lme.models <- rsquared.glmm(list(mod0,lme.mod1,lme.mod2))
+(lme.models <- rsquared.glmm(list(mod0,lme.mod1,lme.mod2)))
 all.equal(lme4.models[1:3, -(1:2)], lme.models[,-(1:2)], tol = 1e-4)
 ```

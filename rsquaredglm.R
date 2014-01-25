@@ -6,9 +6,9 @@
 #' @param a list of fitted (generalized) linear (mixed) model objects
 #' @return a dataframe with one row per model, and "Class",
 #'         "Family", "Marginal", "Conditional" and "AIC" columns
-rsquared.glmm=function(modlist) {
+rsquared.glmm <- function(modlist) {
   # Iterate over each model in the list
-  do.call(rbind,lapply(modlist, r.squared))
+  do.call(rbind, lapply(modlist, r.squared))
 }
 
 #' R-squared and pseudo-rsquared for (generalized) linear (mixed) models
@@ -55,13 +55,16 @@ r.squared.merMod <- function(mdl){
   VarF <- var(as.vector(lme4::fixef(mdl) %*% t(mdl@pp$X)))
   # Get variance of random effects by extracting variance components
   VarRand <- colSums(do.call(rbind, lapply(lme4::VarCorr(mdl), function(x) x[1])))
-  # Get residual variance
-  VarResid <- attr(lme4::VarCorr(mdl),"sc")^2
   if(inherits(mdl, "lmerMod")){
-    mdl.aic  <- AIC(update(mdl, REML=F))
+    # Get residual variance
+    VarResid <- attr(lme4::VarCorr(mdl), "sc")^2
+    # Get ML model AIC
+    mdl.aic <- AIC(update(mdl, REML=F))
+    # Model family for lmer is gaussian
     family <- "gaussian"
   }
   else if(inherits(mdl, "glmerMod")){
+    # Get the model's family and AIC
     family <- summary(mdl)$family
     mdl.aic <- AIC(mdl)
     # Pseudo-r-squared for poisson also requires the fixed effects of the null model
@@ -115,21 +118,20 @@ r.squared.lme <- function(mdl){
 #'
 #' @param varF Variance of fixed effects
 #' @param varRand Variance of random effects
-#' @family family family of the glmm (currently works with gaussian, binomial and poisson)
+#' @param varResid Residual variance. Only necessary for "gaussian" family
+#' @param family family of the glmm (currently works with gaussian, binomial and poisson)
 #' @param mdl.aic The model's AIC
 #' @param mdl.class The name of the model's class
-#' @param null.fixef a numeric vector containing the fixed effects of the null model. This
-#'        parameter is only necessary for "poisson" family
+#' @param null.fixef Numeric vector containing the fixed effects of the null model.
+#'        Only necessary for "poisson" family
 #' @return A data frame with "Class", "Family", "Marginal", "Conditional", and "AIC" columns
-.rsquared.glmm <- function(varF, varRand, VarResid, family,
+.rsquared.glmm <- function(varF, varRand, varResid = NULL, family,
                            mdl.aic, mdl.class, null.fixef = NULL){
-  Rm <- NULL # Marginal R-squared
-  Rc <- NULL # Conditional R-squared
   if(family == "gaussian"){
     # Calculate marginal R-squared (fixed effects/total variance)
-    Rm <- varF/(varF+varRand+VarResid)
+    Rm <- varF/(varF+varRand+varResid)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
-    Rc <- (varF+varRand)/(varF+varRand+VarResid)
+    Rc <- (varF+varRand)/(varF+varRand+varResid)
   }
   else if(family == "binomial"){
     # Calculate marginal R-squared
