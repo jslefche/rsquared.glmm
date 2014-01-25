@@ -36,7 +36,7 @@ r.squared <- function(mdl){
 #' @return a dataframe with with "Class" = "lm", "Family" = "gaussian",
 #'        "Marginal" = unadjusted r-squared, "Conditional" = NA, and "AIC" columns
 r.squared.lm <- function(mdl){
-  data.frame(Class=class(mdl), Family="gaussian",
+  data.frame(Class=class(mdl), Family="gaussian", Link="identity",
              Marginal=summary(mdl)$r.squared,
              Conditional=NA, AIC=AIC(mdl))
 }
@@ -62,10 +62,15 @@ r.squared.merMod <- function(mdl){
     mdl.aic <- AIC(update(mdl, REML=F))
     # Model family for lmer is gaussian
     family <- "gaussian"
+    # Model link for lmer is identity
+    link <- "identity"
   }
   else if(inherits(mdl, "glmerMod")){
-    # Get the model's family and AIC
-    family <- summary(mdl)$family
+    # Get the model summary
+    mdl.summ <- summary(mdl)
+    # Get the model's family, link and AIC
+    family <- mdl.summ$family
+    link <- mdl.summ$link
     mdl.aic <- AIC(mdl)
     # Pseudo-r-squared for poisson also requires the fixed effects of the null model
     if(family=="poisson") {
@@ -80,7 +85,7 @@ r.squared.merMod <- function(mdl){
     }
   }
   # Call the internal function to do the pseudo r-squared calculations
-  .rsquared.glmm(VarF, VarRand, VarResid, family = family,
+  .rsquared.glmm(VarF, VarRand, VarResid, family = family, link = link,
                  mdl.aic = mdl.aic,
                  mdl.class = class(mdl),
                  null.fixef = null.fixef)
@@ -104,7 +109,7 @@ r.squared.lme <- function(mdl){
   # Get residual variance
   VarResid <- as.numeric(nlme::VarCorr(mdl)[rownames(nlme::VarCorr(mdl))=="Residual", 1])
   # Call the internal function to do the pseudo r-squared calculations
-  .rsquared.glmm(VarF, VarRand, VarResid, family = "gaussian",
+  .rsquared.glmm(VarF, VarRand, VarResid, family = "gaussian", link = "identity",
                  mdl.aic = AIC(update(mdl, method="ML")),
                                mdl.class = class(mdl))
 }
@@ -120,31 +125,59 @@ r.squared.lme <- function(mdl){
 #' @param varRand Variance of random effects
 #' @param varResid Residual variance. Only necessary for "gaussian" family
 #' @param family family of the glmm (currently works with gaussian, binomial and poisson)
+#' @param link model link function. Working links are: gaussian: "identity" (default);
+#'        binomial: "logit" (default), "probit"; poisson: "log" (default), "sqrt"
 #' @param mdl.aic The model's AIC
 #' @param mdl.class The name of the model's class
 #' @param null.fixef Numeric vector containing the fixed effects of the null model.
 #'        Only necessary for "poisson" family
 #' @return A data frame with "Class", "Family", "Marginal", "Conditional", and "AIC" columns
-.rsquared.glmm <- function(varF, varRand, varResid = NULL, family,
+.rsquared.glmm <- function(varF, varRand, varResid = NULL, family, link,
                            mdl.aic, mdl.class, null.fixef = NULL){
   if(family == "gaussian"){
+    # Only works with identity link
+    if(link != "identity")
+      family_link.stop(family, link)
     # Calculate marginal R-squared (fixed effects/total variance)
     Rm <- varF/(varF+varRand+varResid)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
     Rc <- (varF+varRand)/(varF+varRand+varResid)
   }
   else if(family == "binomial"){
+    # Get the distribution-specific variance
+    if(link == "logit")
+      varDist <- (pi^2)/3
+    else if(link == "probit")
+      varDist <- 1
+    else
+      family_link.stop(family, link)
     # Calculate marginal R-squared
-    Rm <- varF/(varF+varRand+pi^2/3)
+    Rm <- varF/(varF+varRand+varDist)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
-    Rc <- (varF+varRand)/(varF+varRand+pi^2/3)
+    Rc <- (varF+varRand)/(varF+varRand+varDist)
   }
   else if(family == "poisson"){
+    # Get the distribution-specific variance
+    if(link == "log")
+      varDist <- log(1+1/exp(null.fixef))
+    else if(link == "sqrt")
+      varDist <- 0.25
+    else
+      family_link.stop(family, link)
     # Calculate marginal R-squared
-    Rm <- varF/(varF+varRand+log(1+1/exp(null.fixef)))
+    Rm <- varF/(varF+varRand+varDist)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
-    Rc <- (varF+varRand)/(varF+varRand+log(1+1/exp(null.fixef)))
+    Rc <- (varF+varRand)/(varF+varRand+varDist)
   }
+  else
+    family_link.stop(family, link)
   # Bind R^2s into a matrix and return with AIC values
-  data.frame(Class=mdl.class, Family = family, Marginal=Rm, Conditional=Rc, AIC=mdl.aic)
+  data.frame(Class=mdl.class, Family = family, Link = link,
+             Marginal=Rm, Conditional=Rc, AIC=mdl.aic)
+}
+
+#' stop execution if unable to calculate variance for a given family and link
+family_link.stop <- function(family, link){
+  stop(paste("Don't know how to calculate variance for",
+             family, "family and", link, "link."))
 }
