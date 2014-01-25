@@ -28,13 +28,11 @@ r.squared <- function(mdl){
 
 #' Marginal r-squared for lm objects
 #'
-# This method extracts the variance for fixed and random effects, residuals,
-# and the fixed effects for the null model (in the case of Poisson family),
-#' and calls \code{\link{.rsquared.glmm}}
+#' This method uses r.squared from \code{\link{summary}} as the marginal.
+#' Contrary to other \code{\link{r.squared}} methods, 
+#' this one doesn't call \code{\link{.rsquared.glmm}}
 #'
-#' @param mdl an merMod model (usually fit using \code{\link{lme4::lmer}},
-#'        \code{\link{lme4::glmer}}, \code{\link{lmerTest::lmer}},
-#'        \code{\link{blme::blmer}}, \code{\link{blme::bglmer}}, etc)
+#' @param mdl an lm object (usually fit using \code{\link{lm}},
 #' @return a dataframe with with "Class" = "lm", "Family" = "gaussian",
 #'        "Marginal" = unadjusted r-squared, "Conditional" = NA, and "AIC" columns
 r.squared.lm <- function(mdl){
@@ -148,45 +146,3 @@ r.squared.lme <- function(mdl){
   # Bind R^2s into a matrix and return with AIC values
   data.frame(Class=mdl.class, Family = family, Marginal=Rm, Conditional=Rc, AIC=mdl.aic)
 }
-
-### Examples ###
-
-# set.seed(9)
-# data=data.frame(y=rnorm(100,5,10),y.binom=rbinom(100,1,0.5),
-#  y.poisson=rpois(100,5),fixed1=rnorm(100,20,100),
-#  fixed2=c("Treatment1","Treatment2"),rand1=LETTERS[1:2],
-#  rand1=LETTERS[1:2],
-#  rand2=c(rep("W",25),rep("X",25),rep("Y",25),rep("Z",25)))
-# 
-# library(lme4)
-# #Linear model
-# mod0=lm(y~fixed1,data)
-# #Linear mixed effects model
-# mod1=lmer(y~fixed1+(1|rand2/rand1),data)
-# mod2=lmer(y~fixed1+fixed2+(1|rand2/rand1),data)
-# rsquared.glmm(list(mod0,mod1,mod2))
-# #Generalized linear mixed effects model (binomial)
-# mod3=glmer(y.binom~fixed1*fixed2+(1|rand2/rand1),family="binomial",data)
-# rsquared.glmm(list(mod3))
-# #Generalized linear mixed effects model (poisson)
-# mod4=glmer(y.poisson~fixed1*fixed2+(1|rand2/rand1),family="poisson",data)
-# rsquared.glmm(list(mod4))
-# #Get values for all kinds of models
-# lmer.models=rsquared.glmm(list(mod0,mod1,mod2,mod3,mod4));lmer.models
-# 
-# # Load library MuMIn to compare output to function 'r.squaredGLMM'
-# library(MuMIn)
-# do.call(rbind,lapply(list(mod0,mod1,mod2,mod3,mod4),r.squaredGLMM)) 
-# # Error for Poisson model
-# 
-# # Try with lmerTest package -- output should be the same as above
-# library(lmerTest)
-# lmerTest.models=rsquared.glmm(list(mod0,mod1,mod2,mod3,mod4)); lmerTest.models
-# lmer.models==lmerTest.models #This is generating odd results
-# 
-# detach(package:lme4,unload=T) #Parts of this package conflict with lme4
-# require(nlme)
-# mod0=lm(y~fixed1,data)
-# mod1=lme(y~fixed1,random=~1|rand2/rand1,data)
-# mod2=lme(y~fixed1+fixed2,random=~1|rand2/rand1,data)
-# rsquared.glmm(list(mod0,mod1,mod2))
