@@ -16,6 +16,8 @@ Author: Jon Lefcheck <jslefche@vims.edu> & Juan Sebastian Casallas
 
 Original blog post: http://jonlefcheck.net/2013/03/13/r2-for-linear-mixed-effects-models/
 
+*NOTE:* This function cannot yet handle random slopes for models constructed using the `nlme` package!
+
 
 ## Examples
 
