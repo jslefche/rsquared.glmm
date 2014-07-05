@@ -1,9 +1,21 @@
 # R-squared for generalized linear mixed-effects models
 
-Created by Jon Lefcheck in Mar. 2013, based on the article by Nakagawa and Schielzeth (2013). 
+Description: 
+
+Implementation of Schielzeth and Nakagawa's R2 for generalized linear mixed effects models in R. This function improves on the `r.squaredGLMM` function in the `MuMIn` package by also returning other useful information, such as the model specification, and additional fit criteria in the form of AIC values.
+
+For more information, see: 
+
+    Nakagawa, Shinichi, and Holger Schielzeth. "A general and simple method for obtaining R2 from generalized linear mixed‐effects models." Methods in Ecology and Evolution 4.2 (2013): 133-142.
+    
+    Johnson, Paul C.D. "Extension of Nakagawa & Schielzeth's R2GLMM to random slopes models." Methods in Ecology and Evolution.
+
+Version: 0.2-1 (2014-07-05)
+
+Author: Jon Lefcheck <jslefche@vims.edu> & Juan Sebastian Casallas
+
 Original blog post: http://jonlefcheck.net/2013/03/13/r2-for-linear-mixed-effects-models/
 
-Modified by Juan Sebastian Casallas in Jan. 2014.
 
 ## Examples
 
@@ -40,12 +52,10 @@ rsquared.glmm(list(mod4, mod4.sqrt))
 ```
 ### Compare output to MuMIn::r.squaredGLMM
 
-`MuMIn::r.squaredGLMM` is similar to `r.squared` but cannot calculate r-squared for Poisson models.
-
+`MuMIn::r.squaredGLMM` is similar to `rsquared.glmm` but returns less information:
 ```
 library(MuMIn)
-# Error for Poisson model
-mumin.models <- do.call(rbind, lapply(list(mod0, mod1, mod2, mod3, mod3.prob, mod4, mod4.sqrt), r.squaredGLMM))
+(mumin.models <- do.call(rbind, lapply(list(mod0, mod1, mod2, mod3, mod3.prob, mod4, mod4.sqrt), r.squaredGLMM)))
 # Ignoring lm and poisson rows yields same results as ours
 all.equal(lme4.models[2:5, 4:5], data.frame(mumin.models)[2:5,], check.attributes = F)
 ```
