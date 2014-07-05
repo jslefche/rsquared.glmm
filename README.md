@@ -52,12 +52,10 @@ rsquared.glmm(list(mod4, mod4.sqrt))
 ```
 ### Compare output to MuMIn::r.squaredGLMM
 
-`MuMIn::r.squaredGLMM` is similar to `rsquared.glmm` but returns less information:
+`MuMIn::r.squaredGLMM` is similar to `rsquared.glmm` but returns less information and cannot handle different kinds of link functions:
 ```
 library(MuMIn)
 (mumin.models <- do.call(rbind, lapply(list(mod0, mod1, mod2, mod3, mod3.prob, mod4, mod4.sqrt), r.squaredGLMM)))
-# Ignoring lm and poisson rows yields same results as ours
-all.equal(lme4.models[2:5, 4:5], data.frame(mumin.models)[2:5,], check.attributes = F)
 ```
 
 ### blme
