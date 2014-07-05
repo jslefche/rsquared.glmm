@@ -57,13 +57,14 @@ r.squared.merMod <- function(mdl){
   # Omit random effects at the observation level, variance is factored in later
   VarRand <- sum(
     sapply(
-      VarCorr(mdl)[!sapply(names(ranef(mdl)), function(l) length(unique(mdl@frame[,l])) == nrow(mdl@frame))],
+      VarCorr(mdl)[!sapply(unique(unlist(strsplit(names(ranef(mdl)),":|/"))), function(l) length(unique(mdl@frame[,l])) == nrow(mdl@frame))],
       function(Sigma) {
         X <- model.matrix(mdl)
         Z <- X[,rownames(Sigma)]
         sum(diag(Z %*% Sigma %*% t(Z)))/nrow(X) } ) )
   # Get the dispersion variance
-  VarDisp <- unlist(VarCorr(mdl)[sapply(names(ranef(mdl)), function(l) length(unique(mdl@frame[,l])) == nrow(mdl@frame))])
+  VarDisp <- unlist(VarCorr(mdl)[sapply(unique(unlist(strsplit(names(ranef(mdl)),":|/"))), function(l) length(unique(mdl@frame[,l])) == nrow(mdl@frame))])
+  if(is.null(VarDisp)) VarDisp = 0 else VarDisp = VarDisp
   if(inherits(mdl, "lmerMod")){
     # Get residual variance
     VarResid <- attr(lme4::VarCorr(mdl), "sc")^2
@@ -173,7 +174,7 @@ r.squared.lme <- function(mdl){
       varDist <- 0.25
     else
       family_link.stop(family, link)
-  # Calculate marginal R-squared
+    # Calculate marginal R-squared
     Rm <- varF/(varF+varRand+varDist+varDisp)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
     Rc <- (varF+varRand)/(varF+varRand+varDist+varDisp)
