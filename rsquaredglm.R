@@ -54,7 +54,16 @@ r.squared.merMod <- function(mdl){
   # Get variance of fixed effects by multiplying coefficients by design matrix
   VarF <- var(as.vector(lme4::fixef(mdl) %*% t(mdl@pp$X)))
   # Get variance of random effects by extracting variance components
-  VarRand <- colSums(do.call(rbind, lapply(lme4::VarCorr(mdl), function(x) x[1])))
+  # Omit random effects at the observation level, variance is factored in later
+  VarRand <- sum(
+    sapply(
+      VarCorr(mdl)[!sapply(names(ranef(mdl)), function(l) length(unique(mdl@frame[,l])) == nrow(mdl@frame))],
+      function(Sigma) {
+        X <- model.matrix(mdl)
+        Z <- X[,rownames(Sigma)]
+        sum(diag(Z %*% Sigma %*% t(Z)))/nrow(X) } ) )
+  # Get the dispersion variance
+  VarDisp <- unlist(VarCorr(mdl)[sapply(names(ranef(mdl)), function(l) length(unique(mdl@frame[,l])) == nrow(mdl@frame))])
   if(inherits(mdl, "lmerMod")){
     # Get residual variance
     VarResid <- attr(lme4::VarCorr(mdl), "sc")^2
@@ -85,7 +94,7 @@ r.squared.merMod <- function(mdl){
     }
   }
   # Call the internal function to do the pseudo r-squared calculations
-  .rsquared.glmm(VarF, VarRand, VarResid, family = family, link = link,
+  .rsquared.glmm(VarF, VarRand, VarResid, VarDisp, family = family, link = link,
                  mdl.aic = mdl.aic,
                  mdl.class = class(mdl),
                  null.fixef = null.fixef)
@@ -104,14 +113,14 @@ r.squared.lme <- function(mdl){
   VarF <- var(as.vector(nlme::fixef(mdl) %*% t(Fmat)))
   # Get variance of random effects by extracting variance components
   VarRand <- sum(suppressWarnings(as.numeric(nlme::VarCorr(mdl)
-                                          [rownames(nlme::VarCorr(mdl)) != "Residual",
-                                           1])), na.rm=T)
+                                             [rownames(nlme::VarCorr(mdl)) != "Residual",
+                                              1])), na.rm=T)
   # Get residual variance
   VarResid <- as.numeric(nlme::VarCorr(mdl)[rownames(nlme::VarCorr(mdl))=="Residual", 1])
   # Call the internal function to do the pseudo r-squared calculations
   .rsquared.glmm(VarF, VarRand, VarResid, family = "gaussian", link = "identity",
                  mdl.aic = AIC(update(mdl, method="ML")),
-                               mdl.class = class(mdl))
+                 mdl.class = class(mdl))
 }
 
 #' Marginal and conditional r-squared for glmm given fixed and random variances
@@ -132,7 +141,7 @@ r.squared.lme <- function(mdl){
 #' @param null.fixef Numeric vector containing the fixed effects of the null model.
 #'        Only necessary for "poisson" family
 #' @return A data frame with "Class", "Family", "Marginal", "Conditional", and "AIC" columns
-.rsquared.glmm <- function(varF, varRand, varResid = NULL, family, link,
+.rsquared.glmm <- function(varF, varRand, varResid = NULL, varDisp = NULL, family, link,
                            mdl.aic, mdl.class, null.fixef = NULL){
   if(family == "gaussian"){
     # Only works with identity link
@@ -152,9 +161,9 @@ r.squared.lme <- function(mdl){
     else
       family_link.stop(family, link)
     # Calculate marginal R-squared
-    Rm <- varF/(varF+varRand+varDist)
+    Rm <- varF/(varF+varRand+varDist+varDisp)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
-    Rc <- (varF+varRand)/(varF+varRand+varDist)
+    Rc <- (varF+varRand)/(varF+varRand+varDist+varDisp)
   }
   else if(family == "poisson"){
     # Get the distribution-specific variance
@@ -164,10 +173,10 @@ r.squared.lme <- function(mdl){
       varDist <- 0.25
     else
       family_link.stop(family, link)
-    # Calculate marginal R-squared
-    Rm <- varF/(varF+varRand+varDist)
+  # Calculate marginal R-squared
+    Rm <- varF/(varF+varRand+varDist+varDisp)
     # Calculate conditional R-squared (fixed effects+random effects/total variance)
-    Rc <- (varF+varRand)/(varF+varRand+varDist)
+    Rc <- (varF+varRand)/(varF+varRand+varDist+varDisp)
   }
   else
     family_link.stop(family, link)
