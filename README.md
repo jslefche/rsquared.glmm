@@ -10,11 +10,13 @@ For more information, see:
     
     Johnson, Paul C.D. "Extension of Nakagawa & Schielzeth's R2GLMM to random slopes models." Methods in Ecology and Evolution.
 
-Version: 0.2-2 (2014-07-08)
+Version: 0.2-3 (2014-07-08)
 
 Author: Jon Lefcheck <jslefche@vims.edu> & Juan Sebastian Casallas
 
 Original blog post: http://jonlefcheck.net/2013/03/13/r2-for-linear-mixed-effects-models/
+
+*NOTE:* `rsquared.glmm` function cannot yet handle nested random effects in `nlme` package!
 
 ## Examples
 
@@ -36,6 +38,7 @@ library(lme4)
 mod0 <- lm(y ~ fixed1, data)
 #Linear mixed effects model
 mod1 <- lmer(y ~ fixed1 + (1|rand2/rand1), data)
+rsquared.glmm(mod1)
 mod2 <- lmer(y ~ fixed1 + fixed2 + (1|rand2/rand1), data)
 rsquared.glmm(list(mod0, mod1, mod2))
 #Generalized linear mixed effects model (binomial)
@@ -80,7 +83,7 @@ all.equal(lme4.models[-(1:2)], blme.models[-(1:2)])
 
 ### lmerTest
 
-`lmerTest::lmer` extends `lme4::lmer` to allow anova calculations, but their random and mixed effects coefficients are the same.
+`lmerTest::lmer` extends `lme4::lmer`, but their random and mixed effects coefficients are the same.
 
 ```
 # Try with lmerTest package -- output should be the same as above
@@ -96,13 +99,17 @@ all.equal(lme4.models[1:3, -(1:3)], lmerTest.models[,-(1:3)])
 
 ### lme
 
-`nlme::lme` and `lme4::lmer` yield very similar r-squared values.
+`nlme::lme` and `lme4::lmer` yield very similar r-squared values. Note that the `rsquared.glmm` function cannot handle nested random effects as of yet.
 
 ```
 library(nlme)
-lme.mod1 <- lme(y~fixed1,random=~1|rand2/rand1,data)
-lme.mod2 <- lme(y~fixed1+fixed2,random=~1|rand2/rand1,data)
-(lme.models <- rsquared.glmm(list(mod0,lme.mod1,lme.mod2)))
-# Results only differ in decimal precision
-all.equal(lme4.models[1:3, -(1:3)], lme.models[,-(1:3)], tol = 1e-4)
+lme.mod1 <- lme(y~fixed1,random=~1|rand1,data)
+lme.mod2 <- lme(y~fixed1+fixed2,random=~fixed1|rand1,data)
+(lme.models <- rsquared.glmm(list(lme.mod1,lme.mod2)))
+# Compare to lme4 models
+lmer.mod1 <- lmer(y~fixed1+(1|rand1),data)
+lmer.mod2 <- lmer(y~fixed1+fixed2+(fixed1|rand1),data)
+(lme4.models2=rsquared.glmm(list(lmer.mod1,lmer.mod2)))
+# Major differences in results
+all.equal(lme4.models2[, -(1:3)], lme.models[,-(1:3)], tol = 1e-4)
 ```
