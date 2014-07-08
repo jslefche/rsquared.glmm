@@ -3,10 +3,11 @@
 #' This function calls the generic \code{\link{r.squared}} function for each of the
 #' models in the list and rbinds the outputs into one data frame
 #'
-#' @param a list of fitted (generalized) linear (mixed) model objects
+#' @param a single model or a list of fitted (generalized) linear (mixed) model objects
 #' @return a dataframe with one row per model, and "Class",
 #'         "Family", "Marginal", "Conditional" and "AIC" columns
 rsquared.glmm <- function(modlist) {
+  if( class(modlist) != "list" ) modlist = list(modlist) else modlist
   # Iterate over each model in the list
   do.call(rbind, lapply(modlist, r.squared))
 }
@@ -113,7 +114,9 @@ r.squared.lme <- function(mdl){
   # Get variance of fixed effects by multiplying coefficients by design matrix
   VarF <- var(as.vector(nlme::fixef(mdl) %*% t(Fmat)))
   # Get variance of random effects by extracting variance components
-  VarRand <- sum(diag(Fmat %*% nlme::getVarCov(mdl, type = c("random.effects")) %*% t(Fmat))) / nrow(Fmat)
+  Sigma = nlme::getVarCov(mdl, type = c("random.effects"))
+  Fmat.sigma = Fmat[, rownames(Sigma)]
+  VarRand <- sum(diag(Fmat.sigma %*% Sigma %*% t(Fmat.sigma)) / nrow(Fmat.sigma))
   # Get residual variance
   VarResid <- as.numeric(nlme::VarCorr(mdl)[rownames(nlme::VarCorr(mdl))=="Residual", 1])
   # Call the internal function to do the pseudo r-squared calculations
