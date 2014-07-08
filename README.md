@@ -2,7 +2,7 @@
 
 Description: 
 
-Implementation of Schielzeth and Nakagawa's R2 for generalized linear mixed effects models in R. This function improves on the `r.squaredGLMM` function in the `MuMIn` package by also returning other useful information, such as the model specification, and additional fit criteria in the form of AIC values.
+Implementation of Schielzeth and Nakagawa's R2 for generalized linear mixed effects models in R. This function improves on the `r.squaredGLMM` function in the `MuMIn` package by incorporting different link functions for GLMERs and also returning other useful information, such as the model specification, and additional fit criteria in the form of AIC values.
 
 For more information, see: 
 
@@ -10,14 +10,11 @@ For more information, see:
     
     Johnson, Paul C.D. "Extension of Nakagawa & Schielzeth's R2GLMM to random slopes models." Methods in Ecology and Evolution.
 
-Version: 0.2-1 (2014-07-05)
+Version: 0.2-2 (2014-07-08)
 
 Author: Jon Lefcheck <jslefche@vims.edu> & Juan Sebastian Casallas
 
 Original blog post: http://jonlefcheck.net/2013/03/13/r2-for-linear-mixed-effects-models/
-
-*NOTE:* This function cannot yet handle random slopes for models constructed using the `nlme` package!
-
 
 ## Examples
 
