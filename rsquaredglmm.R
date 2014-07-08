@@ -113,13 +113,11 @@ r.squared.lme <- function(mdl){
   # Get variance of fixed effects by multiplying coefficients by design matrix
   VarF <- var(as.vector(nlme::fixef(mdl) %*% t(Fmat)))
   # Get variance of random effects by extracting variance components
-  VarRand <- sum(suppressWarnings(as.numeric(nlme::VarCorr(mdl)
-                                             [rownames(nlme::VarCorr(mdl)) != "Residual",
-                                              1])), na.rm=T)
+  VarRand <- sum(diag(Fmat %*% nlme::getVarCov(mdl, type = c("random.effects")) %*% t(Fmat))) / nrow(Fmat)
   # Get residual variance
   VarResid <- as.numeric(nlme::VarCorr(mdl)[rownames(nlme::VarCorr(mdl))=="Residual", 1])
   # Call the internal function to do the pseudo r-squared calculations
-  .rsquared.glmm(VarF, VarRand, VarResid, family = "gaussian", link = "identity",
+  .rsquared.glmm(VarF, VarRand, VarResid, VarDisp, family = "gaussian", link = "identity",
                  mdl.aic = AIC(update(mdl, method="ML")),
                  mdl.class = class(mdl))
 }
