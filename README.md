@@ -6,9 +6,11 @@ Implementation of Schielzeth and Nakagawa's R2 for generalized linear mixed effe
 
 For more information, see: 
 
-    Nakagawa, Shinichi, and Holger Schielzeth. "A general and simple method for obtaining R2 from generalized linear mixed‐effects models." Methods in Ecology and Evolution 4.2 (2013): 133-142.
+    Nakagawa, Shinichi, and Holger Schielzeth. "A general and simple method for obtaining R2 from 
+    generalized linear mixed‐effects models." Methods in Ecology and Evolution 4.2 (2013): 133-142.
     
-    Johnson, Paul C.D. "Extension of Nakagawa & Schielzeth's R2GLMM to random slopes models." Methods in Ecology and Evolution.
+    Johnson, Paul C.D. "Extension of Nakagawa & Schielzeth's R2GLMM to random slopes models." Methods in
+    Ecology and Evolution.
 
 Version: 0.2-4 (2014-07-10)
 
@@ -59,7 +61,8 @@ rsquared.glmm(list(mod4, mod4.sqrt))
 `MuMIn::r.squaredGLMM` is similar to `rsquared.glmm` but returns less information and cannot handle different kinds of link functions:
 ```
 library(MuMIn)
-(mumin.models <- do.call(rbind, lapply(list(mod0, mod1, mod1.1, mod2, mod3, mod3.prob, mod4, mod4.sqrt), r.squaredGLMM)))
+(mumin.models <- do.call(rbind, lapply(list(mod0, mod1, mod1.1, mod2, mod3, mod3.prob, mod4, 
+mod4.sqrt), r.squaredGLMM)))
 ```
 
 ### blme
@@ -107,7 +110,8 @@ all.equal(lme4.models[1:3, -(1:3)], lmerTest.models[,-(1:3)])
 ```
 library(nlme)
 lme.mod1 <- lme(y ~ fixed1, random=~1|rand2/rand1, data)
-lme.mod1.1 <- lme(y ~ fixed1, random=~fixed1|rand2/rand1, control = lmeControl(opt = "optim"), data) #Change to old optimizer to solve convergence issueslme4.models2[2:4, -(1:3)]
+#Change to old optimizer to solve convergence issueslme4.models2[2:4, -(1:3)]
+lme.mod1.1 <- lme(y ~ fixed1, random=~fixed1|rand2/rand1, control = lmeControl(opt = "optim"), data) 
 lme.mod2 <- lme(y ~ fixed1 + fixed2, random=~1|rand2/rand1, data)
 (lme.models <- rsquared.glmm(list(lme.mod1, lme.mod1.1, lme.mod2)))
 # Compare to lme4 models, minor differences
