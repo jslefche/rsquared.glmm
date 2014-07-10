@@ -82,7 +82,8 @@ blme.mod3.prob <- update(blme.mod3, family = binomial(link = "probit"))
 blme.mod4 <- bglmer(y.poisson ~ fixed1*fixed2 + (1|rand2/rand1), family="poisson", data)
 blme.mod4.sqrt <- update(blme.mod4, family = poisson(link = "sqrt"))
 #Get values for all kinds of models
-(blme.models <- rsquared.glmm(list(mod0, blme.mod1, blme.mod1.1, blme.mod2, blme.mod3, blme.mod3.prob, blme.mod4, blme.mod4.sqrt)))
+(blme.models <- rsquared.glmm(list(mod0, blme.mod1, blme.mod1.1, blme.mod2, blme.mod3, blme.mod3.prob,
+blme.mod4,blme.mod4.sqrt)))
 # blme models yield better conditional r-squared values
 all.equal(lme4.models[-(1:2)], blme.models[-(1:2)])
 ```
