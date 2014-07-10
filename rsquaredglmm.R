@@ -113,10 +113,23 @@ r.squared.lme <- function(mdl){
   Fmat <- model.matrix(eval(mdl$call$fixed)[-2], mdl$data)
   # Get variance of fixed effects by multiplying coefficients by design matrix
   VarF <- var(as.vector(nlme::fixef(mdl) %*% t(Fmat)))
-  # Get variance of random effects by extracting variance components
-  Sigma = nlme::getVarCov(mdl, type = c("random.effects"))
-  Fmat.sigma = Fmat[, rownames(Sigma)]
-  VarRand <- sum(diag(Fmat.sigma %*% Sigma %*% t(Fmat.sigma)) / nrow(Fmat.sigma))
+  # First, extract variance-covariance matrix of random effects
+  Sigma.list = VarCorr(mdl)[!grepl(" =",rownames(VarCorr(mdl))) & rownames(VarCorr(mdl)) != "Residual", colnames(VarCorr(mdl))=="Variance", drop=F]
+  corr.list = as.numeric(VarCorr(mdl)[!grepl(" =",rownames(VarCorr(mdl))) & rownames(VarCorr(mdl)) != "Residual" & rownames(VarCorr(mdl)) != "(Intercept)",colnames(VarCorr(mdl))=="Corr",drop=F])
+  Sigma.list2 = split(as.numeric(Sigma.list), cumsum(rownames(Sigma.list) == "(Intercept)"), drop=F)
+  Sigma.list2 = lapply(1:length(Sigma.list2), function(i) { 
+    mat = matrix(prod(Sigma.list2[[i]])*abs(corr.list[i]), ncol=length(Sigma.list2[[i]]), nrow=length(Sigma.list2[[i]]))
+    diag(mat) = Sigma.list2[[i]]
+    colnames(mat) = rownames(Sigma.list)[1:sum(cumsum(rownames(Sigma.list) == "(Intercept)") == 1)]
+    rownames(mat) = colnames(mat)
+    return(mat) } )
+  # Calculate variance of random effects
+  VarRand = sum(
+    sapply(
+      Sigma.list2,
+      function(Sigma) {
+        Z <- Fmat[,colnames(Sigma),drop=F]
+        sum(diag(Z %*% Sigma %*% t(Z)))/nrow(Fmat) } ) )
   # Get residual variance
   VarResid <- as.numeric(nlme::VarCorr(mdl)[rownames(nlme::VarCorr(mdl))=="Residual", 1])
   # Call the internal function to do the pseudo r-squared calculations
