@@ -1,5 +1,7 @@
 # R-squared for generalized linear mixed-effects models
 
+#### This function has been completely rewritten and included in the piecewiseSEM package as `sem.model.fits`. See updates here: https://github.com/jslefche/piecewiseSEM/
+
 Description: 
 
 Implementation of Schielzeth and Nakagawa's R2 for generalized linear mixed effects models in R. This function improves on the `r.squaredGLMM` function in the `MuMIn` package by incorporting different link functions for GLMERs and also returning other useful information, such as the model specification, and additional fit criteria in the form of AIC values.
